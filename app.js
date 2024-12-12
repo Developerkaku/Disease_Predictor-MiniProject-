@@ -105,7 +105,7 @@ function installLibraries() {
         console.log("Setting up a Python virtual environment...");
 
         // Step 1: Create a virtual environment
-        exec('python -m venv venv', (venvErr) => {
+        exec('python3 -m venv venv', (venvErr) => {
             if (venvErr) {
                 console.error(`Error creating virtual environment: ${venvErr.message}`);
                 return resolve(false);
@@ -114,7 +114,10 @@ function installLibraries() {
             console.log("Virtual environment created successfully.");
 
             // Step 2: Install dependencies within the virtual environment
-            const pipCommand = process.platform === "win32" ? 'venv\\Scripts\\pip install -r requirements.txt' : 'venv/bin/pip install -r requirements.txt';
+            const pipCommand = process.platform === "win32"
+                ? 'venv\\Scripts\\pip install --use-pep517 -r requirements.txt'
+                : 'venv/bin/pip install --use-pep517 -r requirements.txt';
+            // const pipCommand = process.platform === "win32" ? 'venv\\Scripts\\pip install -r requirements.txt' : 'venv/bin/pip install -r requirements.txt';
             exec(pipCommand, (pipErr, stdout, stderr) => {
                 if (pipErr) {
                     console.error(`Error installing requirements: ${pipErr.message}`);
