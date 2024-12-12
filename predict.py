@@ -151,7 +151,7 @@ def predictDisease(symptoms):
 
 		symptoms = symptoms.split(",")
 		# Normalize input symptoms to match the format in `symptom_index`
-		symptoms = [" ".join([word.capitalize() for word in symptom.strip().split("_")]) for symptom in symptoms]
+		symptoms = [" ".join([word.capitalize() for word in symptom.strip().split(" ")]) for symptom in symptoms]
 
 		# Creating input data for the models
 		input_data = [0] * len(data_dict["symptom_index"])

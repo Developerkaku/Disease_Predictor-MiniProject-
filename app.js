@@ -82,6 +82,7 @@ io.on('connection', (socket) => {
 
 function runPredictInPython(inputData) {
     return new Promise((resolve, reject) => {
+        
         pythonProcess.stdin.write(inputData + "\n");
 
         pythonProcess.stdout.once('data', (data) => {
