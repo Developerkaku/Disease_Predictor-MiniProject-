@@ -1,62 +1,91 @@
-// import { exec } from "child_process";
-// import { Socket } from "socket.io";
-// import express from "express";
-// import { createServer, Server } from "http";
-// import path from "path";
-// import { fileURLToPath } from "url";
-
-const { exec, spawn } = require("child_process");
+//Importing required modules / destructuring
+const { spawn, exec } = require("child_process");
 const express = require("express");
-// const cors = require('cors');
-// const bodyParser = require("body-parser");
 const { createServer } = require('node:http');
-const { join, dirname } = require("node:path");
 const { Server } = require('socket.io');
-const fs = require("fs");
 const path = require("path");
-const { Console } = require("console");
-const { type } = require("os");
+const { captureRejectionSymbol } = require("events");
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer);
-const PORT = 3000;
 
+//Env variables
+const PORT = process.env.PORT || 3000;
+
+//serving only the static files inside the folder public preventing other files to be accessed
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(express.json()); // Middleware for parsing JSON requests
 
-let pythonProcess;
-let symptomsList;
-let modelsTrained;
+//Serving login page at start
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "login.html"));
+});
 
-function startPythonScript() {
-    console.log(`Script started!`);
+app.get('/predict', (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "predict.html"));
+});
 
-    // return new Promise((resolve, reject) => {
-        //spawn input data to the Python script
-        pythonProcess = spawn('python', ['predict.py']);
+httpServer.listen(PORT, () => {
+    console.log(` server is running on http://localhost:${PORT} (local testing)`);
+});
 
-        pythonProcess.stdout.on('data', (data) => {
-            console.log(`just output: ${data}, ${typeof (data)}`);
-            try {
-                const response = JSON.parse(data.toString());
-                if(response.models_trained !== undefined) modelsTrained = response.models_trained;
-                console.log(modelsTrained);
-            } catch (err) {
-                console.log(err);
-            }
+io.on('connection', (socket) => {
+    console.log(`user connected: ${socket.id}`);
+
+    socket.on("getSymptoms", () => {
+        console.log(`Recieved request for symptoms from ${socket.id}`);
+        getSymptoms();
+    });
+
+    socket.on('predict', async (symptoms) => {
+        console.log("Recieved symptoms : " + symptoms);
+
+        let result;
+        try {
+            result = await runPredictInPython(symptoms)
+            console.log(result);
+
+            //Emit to the client
+            socket.emit("prediction", result);
+        } catch {
+            // log the error
+            console.error(`error: ${result}`);
+        }
+
+    });
+
+    socket.on('disconnect', (socket) => {
+        console.log(`Socket ${socket} disconnected.`);
+    });
+
+    function getSymptoms() {
+        if (symptomsList) {
+            socket.emit("symptomsList", symptomsList);
+            return;
+        }
+    
+        if (!modelsTrained) {
+            socket.emit("error");
+            console.log("Models not trained yet");
+            return false;
+        }
+    
+        let stdin = pythonProcess.stdin.write("get\n");
+        console.log(stdin);
+    
+        pythonProcess.stdout.once("data", (data) => {
+    
+            //replacing the tokens : '[', '\', ']' in the recieced python stdout 
+            data = String(data).replace(/[\[\]\']/g, '');
+            symptomsList = data.split(",").map(word => word.trim());
+    
+            //Emitting the list to the client/s
+            socket.emit("symptomsList", symptomsList);
         });
-
-        pythonProcess.stderr.on("data", (data) => {
-            console.error(`Python stderr: ${data}`);
-        });
-        pythonProcess.on("close", (code) => {
-            console.log(`Python script exited with code ${code}`);
-        });
-    // });
-}
-startPythonScript();
+    }
+});
 
 function runPredictInPython(inputData) {
     return new Promise((resolve, reject) => {
@@ -72,7 +101,7 @@ function runPredictInPython(inputData) {
                     reject(response.error);
                 } else {
                     resolve(response);
-                }                                              //promise tisi stdout ni repat cheyakunda try cheyyi
+                }
             } catch (err) {
                 reject(err);
             }
@@ -80,59 +109,61 @@ function runPredictInPython(inputData) {
     });
 }
 
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "login.html"));
-});
-app.get('/predict', (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "predict.html"));
-});
+function installLibraries() {
+    return new Promise((resolve, reject) => {
+        exec('pip install -r requirements.txt', (error, stdout, stderr) => {
+            if (error) {
+                console.log(`Error installing requirements: ${error.message}`);
+                resolve(false);
+            }
+            if (stderr) {
+                console.log(`Stderr: ${stderr}`);
+                resolve(false);
+            }
 
-io.on('connection', (socket) => {
-    console.log(`user connected: ${socket}`);
-
-    socket.on("getSymptoms", () => {
-        console.log("ochchcindi bey !!!");
-        
-        if(!modelsTrained){
-            socket.emit("error");
-            console.log("dengey antunna");
-            return "fuck away!";
-        }
-
-        let stdin = pythonProcess.stdin.write("get\n");
-        console.log(stdin);
-
-        pythonProcess.stdout.once("data", (data) => {
-            
-            data = String(data).replace(/[\[\]\']/g, '');
-            symptomsList = data.split(",").map(word => word.trim());
-
-            socket.emit("symptomsList", symptomsList);
+            console.log('Requirements installed successfully');
+            console.log(stdout);
+            resolve(true);
         });
     });
+}
 
-    socket.on('predict', async (symptoms) => {
-        console.log("Recieved symptoms : " + symptoms);
 
-        let result;
-        try {
-            result = await runPredictInPython(symptoms)
-            console.log(result)
+let pythonProcess;
+let symptomsList;
+let modelsTrained;
 
-            socket.emit("prediction", result.prediction);
-            if(result.warning) socket.emit("error");
-        } catch {
-            // Do nothing , (server aagipotundi bayya error oste, try catch pettina 😅)
-            console.error(`error: ${result}`);
-        }
+async function startPythonScript() {
 
-    });
+    //INstallling required libraries for python
+    let install = await installLibraries();
 
-    socket.on('disconnect', (socket) => {
-        console.log(`Socket ${socket} disconnected.`);
-    });
-})
+    //Running the script
+    if (install !== false) {
+        console.log(`Runnig the script!`);
+        pythonProcess = spawn('python', ['predict.py']);
 
-httpServer.listen(PORT, () => {
-    console.log(` server is running on http://localhost:${PORT}`);
-});
+        pythonProcess.stdout.on('data', (data) => {
+            console.log(`just output: ${data}, ${typeof (data)}`);
+            try {
+                const response = JSON.parse(data.toString());
+                if (response.models_trained !== undefined) modelsTrained = response.models_trained;
+                console.log(modelsTrained);
+            } catch (err) {
+                console.log(err);
+            }
+        });
+
+        pythonProcess.stderr.on("data", (data) => {
+            console.error(`Python stderr: ${data}`);
+        });
+        pythonProcess.on("close", (code) => {
+            console.log(`Python script exited with code ${code}`);
+        });
+    } else {
+        console.log("Exiting the node script!");
+    }
+}
+
+//start the script as soon as the server powers up!
+startPythonScript()

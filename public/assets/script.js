@@ -5,13 +5,15 @@ let symptomsList = [];
 
 // Request symptoms from the backend when the page loads
 let getSymptomsInterval = setInterval(() => {
-    if(symptomsList.length > 0) clearInterval(getSymptomsInterval);
+    if (symptomsList.length > 0) clearInterval(getSymptomsInterval);
     socket.emit('getSymptoms');
 }, 5000);
 
 // Receive the symptoms list and store them dynamically
 socket.on('symptomsList', function (symptoms) {
-    symptomsList = symptoms; // Update the global symptoms list
+    // Update the global symptoms list
+    //convert the symptoms to lower case for easier comparision
+    symptomsList = symptoms.map(symptom => symptom.toLowerCase());
     console.log("Symptoms received from backend:", symptomsList);
 });
 
@@ -22,7 +24,6 @@ socket.on('error', () => {
     responseMessage.textContent = "Error occured at backend ,Please try again after sometime!";
     messagesDiv.appendChild(responseMessage);
     messagesDiv.classList.add('show');
-    // Alert changes - should appear in chat that there was an error
 });
 
 // Welcome Message
@@ -58,12 +59,13 @@ document.getElementById('submit').addEventListener('click', function () {
         messagesDiv.appendChild(userMessage);
 
         // Identify symptoms
-        const symptoms = identifySymptoms(input);
+        lowerCaseInput = input.toLowerCase();
+        const symptoms = identifySymptoms(lowerCaseInput);
 
         if (symptoms.length > 0) {
             socket.emit("predict", symptoms);
         } else {
-            let errMsg = (symptomsList.length === 0) ? "Error occured at the server, please try again." : "No symptoms identified!" ;
+            let errMsg = (symptomsList.length === 0) ? "Error occured at the server, please try again." : "No symptoms identified!";
             const responseMessage = document.createElement('div');
             responseMessage.classList.add('message', 'response-message');
             responseMessage.textContent = errMsg;
@@ -93,14 +95,25 @@ document.getElementById('submit').addEventListener('click', function () {
 
 socket.on("prediction", (response) => {
     const messagesDiv = document.querySelector('.messages');
-    const responseMessageText = response; // Contains string "prediction"
+    const predictionMessageText = response.prediction; // Contains string "prediction"
 
     // Response message
     const responseMessage = document.createElement('div');
     responseMessage.classList.add('message', 'response-message');
-    responseMessage.textContent = responseMessageText;
+    responseMessage.textContent = predictionMessageText;
     messagesDiv.appendChild(responseMessage);
     messagesDiv.classList.add('show');
+
+    if (response.warning) {
+        const warningMessageText = "WARNING:\n"+response.warning; // Contains string "warning"
+
+        // Response message
+        const errorMessage = document.createElement('div');
+        errorMessage.classList.add('message', 'response-message');
+        errorMessage.textContent = warningMessageText;
+        messagesDiv.appendChild(errorMessage);
+        messagesDiv.classList.add('show');
+    }
 
     // Scroll to the bottom of the messages
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
@@ -142,28 +155,28 @@ updateOverlayHeight();
 const clearButton = document.querySelector('.clear');
 const signOutButton = document.querySelector('.signOut');
 
-clearButton.addEventListener('click', function() {
+clearButton.addEventListener('click', function () {
     const messagesDiv = document.querySelector('.messages');
-    const overlay = document.querySelector('.messages-overlay'); 
-    while (messagesDiv.firstChild) { 
-        messagesDiv.removeChild(messagesDiv.firstChild); 
-    } 
+    const overlay = document.querySelector('.messages-overlay');
+    while (messagesDiv.firstChild) {
+        messagesDiv.removeChild(messagesDiv.firstChild);
+    }
     messagesDiv.appendChild(overlay); // Re-add the overlay to messagesDiv 
     messagesDiv.classList.remove('show');
 });
 
-signOutButton.addEventListener('click', function() {
+signOutButton.addEventListener('click', function () {
     localStorage.clear();
     location.reload();
 });
 
-document.addEventListener('keydown', function(event) {
-    if(event.key == "Enter"){
+document.addEventListener('keydown', function (event) {
+    if (event.key == "Enter") {
         document.getElementById("submit").click();
-    } 
+    }
     const inputElem = document.getElementById('input');
     if (!inputElem.matches(':focus')) {
         inputElem.focus();
-    } 
+    }
 });
 

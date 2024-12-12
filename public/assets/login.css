@@ -6,7 +6,7 @@ body {
     align-items: center;
     flex-direction: column;
     position: relative;
-    font-family: Arial, sans-serif;
+    /* font-family: Arial, sans-serif; */
     overflow: hidden;
     font-family: "roboto";
 }
@@ -47,6 +47,7 @@ h1 {
     margin-bottom: 20px;
     color: rgb(118, 125, 115);
     font-size: 24px;
+    cursor:default;
 }
 
 .form-group {

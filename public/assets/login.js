@@ -15,5 +15,3 @@ document.getElementById('login-form').addEventListener('submit', function (e) {
         alert('Please fill in both fields.');
     }
 });
-
-alert("start");
